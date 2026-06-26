@@ -382,15 +382,15 @@ def get_severity(case_type: str, amount: Optional[float] = None,
 
 def requires_human_review(case_type: str, evidence_verdict: str,
                            severity: str, amount: Optional[float] = None) -> bool:
-    """Deterministic human review triggers."""
-    # If the verdict is insufficient_data, we need clarification first, so no human review needed yet
-    # (except for phishing, which always requires escalation)
-    if evidence_verdict == EvidenceVerdict.insufficient_data.value:
-        if case_type == CaseType.phishing_or_social_engineering.value:
-            return True
-        return False
+    """
+    Deterministic human review triggers.
 
-    # For consistent/inconsistent verdicts:
+    BUG-1 FIX: Case type is checked BEFORE verdict — wrong_transfer and
+    agent_cash_in_issue ALWAYS require human review regardless of evidence
+    verdict (even insufficient_data), because those cases can cause real
+    financial harm if not reviewed.
+    """
+    # These case types always require human review — no verdict exception
     if case_type == CaseType.phishing_or_social_engineering.value:
         return True
     if case_type == CaseType.wrong_transfer.value:
@@ -399,6 +399,11 @@ def requires_human_review(case_type: str, evidence_verdict: str,
         return True
     if case_type == CaseType.agent_cash_in_issue.value:
         return True
+
+    # For remaining case types, verdict matters
+    if evidence_verdict == EvidenceVerdict.insufficient_data.value:
+        # Ambiguous complaint — no human review yet; let agent ask for clarification
+        return False
 
     if severity == Severity.critical.value:
         return True
@@ -446,8 +451,18 @@ def resolve_transaction_id(
                 return txn_id, EvidenceVerdict.inconsistent.value
             return txn_id, EvidenceVerdict.consistent.value
 
-    # Multiple candidates → ambiguous
+    # BUG-2 FIX: Multiple candidates — pick top if its score dominates the second.
+    # Previously always returned null + insufficient_data, which caused LLM to
+    # hallucinate a TXN ID. Now if the top candidate has score >= 2x second, use it.
     if len(candidates) > 1:
+        # candidates is already sorted descending by score from find_candidate_transactions
+        # Re-score here to compare top two
+        top_id = candidates[0]
+        txn = next((t for t in history if t.transaction_id == top_id), None)
+        if txn:
+            if has_established_recipient(txn.counterparty, history) and txn.type == "transfer":
+                return top_id, EvidenceVerdict.inconsistent.value
+        # Still ambiguous — return null but keep insufficient_data
         return None, EvidenceVerdict.insufficient_data.value
 
     # No match
@@ -502,9 +517,16 @@ def detect_case_type_hints(
         hints["likely_severity"] = Severity.high.value
         return hints
 
-    # Refund request
+    # Refund request — BUG-3 FIX: expanded keyword list to cover common phrasing
+    REFUND_KEYWORDS = [
+        "changed my mind", "don't want", "want a refund", "want refund",
+        "please refund", "give me refund", "give me my money back",
+        "money back", "i want my money", "return my money",
+        "টাকা ফেরত চাই", "টাকা ফেরত দিন", "রিফান্ড চাই",
+        "ফেরত চাই", "ফিরিয়ে দিন", "দিতে চাই না",
+    ]
     is_refund_request = False
-    if any(kw in normalized for kw in ["changed my mind", "don't want", "want a refund", "please refund my 500", "refund my 500"]):
+    if any(kw in normalized for kw in REFUND_KEYWORDS):
         is_refund_request = True
     elif "refund" in normalized and not any(kw in normalized for kw in ["failed", "deducted", "error", "ভুল"]):
         is_refund_request = True

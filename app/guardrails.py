@@ -126,13 +126,14 @@ def _has_safety_reminder(text: str) -> bool:
 def apply_guardrails(response: dict) -> dict:
     """
     Apply all safety guardrails to the response dict.
-    Modifies customer_reply and recommended_next_action in-place.
+    Modifies customer_reply, recommended_next_action, and agent_summary in-place.
     This function is deterministic and cannot be bypassed by LLM output.
 
     Returns the sanitized response dict.
     """
     customer_reply = str(response.get("customer_reply", "")).strip()
     recommended_action = str(response.get("recommended_next_action", "")).strip()
+    agent_summary = str(response.get("agent_summary", "")).strip()
     lang = _detect_language(customer_reply)
 
     # ── Guard 1: Remove credential request patterns ───────────────────────────
@@ -186,8 +187,20 @@ def apply_guardrails(response: dict) -> dict:
             "support channels. " + SAFETY_REMINDER_EN
         )
 
+    # ── Guard 6: Scrub third-party URLs/phones from agent_summary (HALL-2) ──────
+    # The LLM occasionally embeds raw phone numbers or URLs in the agent_summary
+    # that could mislead agents into contacting external parties.
+    for pattern in THIRD_PARTY_PATTERNS:
+        if re.search(pattern, agent_summary, re.IGNORECASE):
+            logger.warning(
+                f"GUARDRAIL: third-party link/phone in agent_summary — pattern='{pattern[:50]}'"
+            )
+            agent_summary = _scrub_sentence_containing(agent_summary, pattern)
+
     response["customer_reply"] = customer_reply.strip()
     response["recommended_next_action"] = recommended_action.strip() or \
         "Assign to available support agent for manual review."
+    response["agent_summary"] = agent_summary.strip() or \
+        "Ticket requires manual review by a support agent."
 
     return response

@@ -44,6 +44,61 @@ MAX_COMPLAINT_LENGTH = 3000
 MAX_HISTORY_ENTRIES = 8   # Keep top-8 most recent; balances context vs. token cost
 
 
+# ─── Dynamic Confidence Computation ──────────────────────────────────────────
+
+def compute_rule_confidence(case_type: str, verdict: str, rule_context: Optional[dict]) -> float:
+    """
+    Compute a confidence score (0.0–1.0) based on how many deterministic rule
+    signals align with the classification.
+
+    Scale:
+      0.95–0.99  → High-certainty deterministic signals (phishing keywords, exact duplicate)
+      0.80–0.94  → Rule hints present with supporting transaction evidence
+      0.65–0.79  → Partial hints or ambiguous evidence
+      0.50–0.64  → Weak signals, vague complaint, no matching transactions
+    """
+    rc = rule_context or {}
+
+    # Phishing detected by keyword rules — extremely high certainty
+    if rc.get("phishing_detected"):
+        return 0.97
+
+    # Confirmed exact duplicate (same amount + counterparty + close timestamp)
+    if rc.get("duplicate_transaction_id"):
+        return 0.95
+
+    hints = rc.get("case_hints", {})
+    has_hints = bool(hints.get("likely_case_type"))
+    has_txn_id = bool(rc.get("rule_suggested_txn_id"))
+    is_consistent = verdict == EvidenceVerdict.consistent.value
+    is_insufficient = verdict == EvidenceVerdict.insufficient_data.value
+    has_amounts = bool(rc.get("extracted_amounts_bdt"))
+    established_recipients = rc.get("established_recipient_patterns", [])
+
+    score = 0.65  # base
+
+    if has_hints:
+        score += 0.10
+    if has_txn_id:
+        score += 0.08
+    if is_consistent:
+        score += 0.07
+    if has_amounts:
+        score += 0.03
+    if case_type in (CaseType.wrong_transfer.value, CaseType.payment_failed.value,
+                     CaseType.agent_cash_in_issue.value):
+        # These have clearer evidence patterns
+        score += 0.02
+    if established_recipients and verdict == EvidenceVerdict.inconsistent.value:
+        # Contradicting evidence is itself high-confidence (we know it's inconsistent)
+        score += 0.05
+    if is_insufficient and not has_txn_id:
+        score -= 0.05  # genuinely ambiguous
+
+    return round(min(0.97, max(0.50, score)), 2)
+
+
+
 # ─── Safe Fallback Response ───────────────────────────────────────────────────
 
 def build_fallback_response(ticket_id: str, rule_context: Optional[dict] = None) -> dict:
@@ -198,6 +253,8 @@ def build_fallback_response(ticket_id: str, rule_context: Optional[dict] = None)
             recommended_next_action = "Assign to an available support agent for manual investigation. Do not make any commitments to the customer until investigated."
             customer_reply = "Thank you for contacting us. We have received your complaint and a support agent will review it shortly through official channels. Please do not share your PIN, OTP, or password with anyone."
 
+    confidence = compute_rule_confidence(case_type, verdict, rule_context)
+
     return {
         "ticket_id": ticket_id,
         "relevant_transaction_id": txn_id,
@@ -209,7 +266,7 @@ def build_fallback_response(ticket_id: str, rule_context: Optional[dict] = None)
         "recommended_next_action": recommended_next_action,
         "customer_reply": customer_reply,
         "human_review_required": human_review,
-        "confidence": 0.85,
+        "confidence": confidence,
         "reason_codes": [case_type, "rule_fallback"],
     }
 
@@ -338,6 +395,22 @@ def post_validate(raw: dict, request: TicketRequest, rule_context: dict) -> dict
     ]:
         if not raw.get(field) or not str(raw[field]).strip():
             raw[field] = default
+
+    # ── Blend LLM confidence with rule-based confidence ───────────────────────
+    # The LLM often returns a flat ~0.9 for all cases. We blend it 50/50 with
+    # our deterministic rule confidence so the final value reflects actual
+    # signal strength and varies meaningfully across different ticket types.
+    rule_conf = compute_rule_confidence(
+        raw.get("case_type", "other"),
+        raw.get("evidence_verdict", "insufficient_data"),
+        rule_context,
+    )
+    llm_conf = raw.get("confidence")
+    if llm_conf is not None:
+        # Weighted average: 60% rule signal, 40% LLM signal
+        raw["confidence"] = round(0.6 * rule_conf + 0.4 * float(llm_conf), 2)
+    else:
+        raw["confidence"] = rule_conf
 
     return raw
 

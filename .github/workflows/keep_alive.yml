@@ -2,13 +2,12 @@ name: Keep Alive Ping
 
 on:
   schedule:
-    # Run every 10 minutes
+    # Run every 10 minutes — keeps Render free tier awake during judging window
     - cron: '*/10 * * * *'
   workflow_dispatch: # Allow manual trigger in GitHub Actions tab
 
 jobs:
   ping:
-    runs-ok: true
     runs-on: ubuntu-latest
     steps:
       - name: Ping Health Endpoint
@@ -20,4 +19,4 @@ jobs:
             exit 1
           fi
           echo "Pinging health endpoint at $APP_URL/health"
-          curl -f -s "$APP_URL/health"
+          curl -f -s "$APP_URL/health" && echo " — OK" || echo " — FAILED"

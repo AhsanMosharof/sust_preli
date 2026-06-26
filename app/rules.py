@@ -299,20 +299,27 @@ def find_candidate_transactions(
 
 def find_duplicate_transactions(history: list[TransactionEntry]) -> Optional[str]:
     """
-    Detect duplicate payment: 2 COMPLETED transactions with the same
+    Detect duplicate payment: 2 transactions with the same
     amount + counterparty + type within 120 seconds.
     Returns the SECOND (duplicate) transaction_id, or None.
 
-    Edge case: skip if either status is not 'completed' (edge_cases.md §2.9).
+    RISK-4 FIX: Also catches completed+pending pairs — the pending one is
+    the suspected duplicate (e.g., accidental double-tap before first settled).
+    Completed+completed = confirmed duplicate.
+    Completed+pending   = probable duplicate (pending = double-submitted).
     """
     if len(history) < 2:
         return None
 
     for i, t1 in enumerate(history):
-        if t1.status != "completed" or t1.amount <= 0:
+        if t1.amount <= 0:
+            continue
+        # t1 must be completed to be the "original"
+        if t1.status != "completed":
             continue
         for t2 in history[i + 1:]:
-            if t2.status != "completed":
+            # t2 can be completed OR pending (suspected double-submit)
+            if t2.status not in ("completed", "pending"):
                 continue
             if (
                 t1.amount == t2.amount
@@ -385,25 +392,31 @@ def requires_human_review(case_type: str, evidence_verdict: str,
     """
     Deterministic human review triggers.
 
-    BUG-1 FIX: Case type is checked BEFORE verdict — wrong_transfer and
-    agent_cash_in_issue ALWAYS require human review regardless of evidence
-    verdict (even insufficient_data), because those cases can cause real
-    financial harm if not reviewed.
+    Key rule: wrong_transfer and agent_cash_in REQUIRE human review only when
+    a transaction has been identified (consistent or inconsistent verdict).
+    When evidence_verdict=insufficient_data, we ask for clarification first.
+    This matches Sample-08: wrong_transfer + insufficient_data → human_review=False.
+
+    Phishing and duplicate_payment ALWAYS require review (even with insufficient_data).
     """
-    # These case types always require human review — no verdict exception
+    # Phishing always escalates regardless of verdict
     if case_type == CaseType.phishing_or_social_engineering.value:
         return True
-    if case_type == CaseType.wrong_transfer.value:
-        return True
+
+    # Duplicate payment always requires verification
     if case_type == CaseType.duplicate_payment.value:
+        return True
+
+    # When evidence is ambiguous — ask for clarification first, no human review yet
+    # Exception: phishing and duplicate are already handled above
+    if evidence_verdict == EvidenceVerdict.insufficient_data.value:
+        return False
+
+    # With a confirmed transaction (consistent or inconsistent verdict):
+    if case_type == CaseType.wrong_transfer.value:
         return True
     if case_type == CaseType.agent_cash_in_issue.value:
         return True
-
-    # For remaining case types, verdict matters
-    if evidence_verdict == EvidenceVerdict.insufficient_data.value:
-        # Ambiguous complaint — no human review yet; let agent ask for clarification
-        return False
 
     if severity == Severity.critical.value:
         return True
@@ -418,6 +431,7 @@ def requires_human_review(case_type: str, evidence_verdict: str,
             return False
         return True
     return False
+
 
 
 
@@ -496,8 +510,14 @@ def detect_case_type_hints(
     ut = (user_type or "customer").lower()
     normalized = normalize_text(complaint.lower())
 
-    # Merchant settlement
-    if ut == "merchant" and any(t.type == "settlement" for t in history):
+    # RISK-6 FIX: Merchant settlement detection — works even if user_type is not
+    # explicitly "merchant". A settlement-type transaction in history + any mention
+    # of settlement/delay in the complaint is a strong enough signal.
+    has_settlement_txn = any(t.type == "settlement" for t in history)
+    settlement_keywords = ["settlement", "settle", "settled", "payout", "disbursement"]
+    complaint_mentions_settlement = any(kw in normalized for kw in settlement_keywords)
+
+    if has_settlement_txn and (ut == "merchant" or complaint_mentions_settlement):
         hints["likely_case_type"] = CaseType.merchant_settlement_delay.value
         hints["likely_department"] = Department.merchant_operations.value
         hints["likely_severity"] = Severity.medium.value

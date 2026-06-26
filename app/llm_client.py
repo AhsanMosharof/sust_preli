@@ -135,6 +135,9 @@ async def call_llm(prompt: str) -> Optional[dict]:
     Call Gemini with the full prompt string.
     Returns parsed+normalized dict, or None on any failure.
     The caller is responsible for applying fallback logic when None is returned.
+
+    Retry policy: on 429 ResourceExhausted (per-minute quota), waits 2s and
+    retries once. This handles burst rate limits without burning timeout budget.
     """
     timeout = int(os.getenv("LLM_TIMEOUT_SECONDS", "20"))
 
@@ -144,31 +147,41 @@ async def call_llm(prompt: str) -> Optional[dict]:
         logger.error(f"LLM not configured: {e}")
         return None
 
-    try:
-        loop = asyncio.get_event_loop()
-
-        # Run the synchronous Gemini call in a thread pool to avoid blocking
-        response = await asyncio.wait_for(
-            loop.run_in_executor(None, lambda: model.generate_content(prompt)),
-            timeout=timeout,
-        )
-
-        raw_text = response.text.strip() if response.text else ""
-        parsed = parse_llm_output(raw_text)
-
-        if parsed is None:
-            logger.warning("LLM returned unparseable output — activating fallback")
+    async def _attempt() -> Optional[dict]:
+        try:
+            loop = asyncio.get_event_loop()
+            response = await asyncio.wait_for(
+                loop.run_in_executor(None, lambda: model.generate_content(prompt)),
+                timeout=timeout,
+            )
+            raw_text = response.text.strip() if response.text else ""
+            parsed = parse_llm_output(raw_text)
+            if parsed is None:
+                logger.warning("LLM returned unparseable output — activating fallback")
+                return None
+            return normalize_llm_output(parsed)
+        except asyncio.TimeoutError:
+            logger.warning(f"LLM call timed out after {timeout}s — activating fallback")
             return None
 
-        return normalize_llm_output(parsed)
-
-    except asyncio.TimeoutError:
-        logger.warning(f"LLM call timed out after {timeout}s — activating fallback")
-        return None
+    try:
+        return await _attempt()
 
     except Exception as e:
         err_type = type(e).__name__
         err_msg = str(e)[:200]
-        # 429 rate limit, 401 auth, etc. all handled here
+
+        # 429 ResourceExhausted — wait 2s and retry once (per-minute quota resets)
+        if "429" in err_msg or "ResourceExhausted" in err_type or "quota" in err_msg.lower():
+            logger.warning(f"LLM 429 quota hit — waiting 2s before retry")
+            await asyncio.sleep(2)
+            try:
+                return await _attempt()
+            except Exception as e2:
+                logger.error(f"LLM retry also failed [{type(e2).__name__}]: {str(e2)[:150]} — activating fallback")
+                return None
+
+        # All other errors (401, 500, network) — fail fast
         logger.error(f"LLM call failed [{err_type}]: {err_msg} — activating fallback")
         return None
+

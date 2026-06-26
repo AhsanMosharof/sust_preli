@@ -47,7 +47,7 @@ def get_model():
         generation_config=genai.GenerationConfig(
             response_mime_type="application/json",  # enforce JSON output at API level
             temperature=0.1,                         # low temp = more deterministic
-            max_output_tokens=1400,                  # enough for all fields; prevent runaway
+            max_output_tokens=2500,                  # increased from 1400 — prevents JSON truncation mid-field
         ),
     )
     return _model

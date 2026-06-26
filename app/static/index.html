@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QueueStorm Investigator — AI Support Copilot</title>
+  <!-- Outfit Google Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-dark: #0b0f19;
+      --card-bg: #151c2c;
+      --border-color: #242f47;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --emerald: #10b981;
+      --amber: #f59e0b;
+      --rose: #f43f5e;
+      --violet: #8b5cf6;
+      --cyan: #06b6d4;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      line-height: 1.5;
+      padding: 2rem;
+      min-height: 100vh;
+    }
+
+    /* Container */
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.5rem;
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .brand-logo {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--primary), var(--violet));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1.5rem;
+      color: white;
+    }
+
+    .brand-title h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: -0.025em;
+    }
+
+    .brand-title p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .system-status {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+      background-color: rgba(16, 185, 129, 0.1);
+      padding: 0.5rem 1rem;
+      border-radius: 20px;
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      color: var(--emerald);
+      font-weight: 500;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background-color: var(--emerald);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--emerald);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    /* Quick select row */
+    .quick-select {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .quick-select-title {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    .case-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .btn-case {
+      background-color: #1e293b;
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .btn-case:hover {
+      background-color: var(--primary);
+      border-color: var(--primary);
+    }
+
+    .btn-case.active {
+      background-color: var(--primary);
+      border-color: var(--primary);
+      box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+    }
+
+    /* Main Grid */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 1024px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Card Panels */
+    .panel {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .panel-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Inputs UI */
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    label {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    input[type="text"], textarea, select {
+      background-color: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-main);
+      padding: 0.75rem;
+      font-family: inherit;
+      font-size: 0.95rem;
+      width: 100%;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus, textarea:focus, select:focus {
+      border-color: var(--primary);
+    }
+
+    .editor-wrapper {
+      position: relative;
+      width: 100%;
+    }
+
+    .btn-analyze {
+      background: linear-gradient(135deg, var(--primary), var(--violet));
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 1rem;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .btn-analyze:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+    }
+
+    .btn-analyze:active {
+      transform: translateY(0);
+    }
+
+    .btn-analyze:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Output UI Elements */
+    .metadata-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+
+    .metadata-card {
+      background-color: rgba(15, 23, 42, 0.4);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .metadata-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+
+    .metadata-value {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    /* Pill Badges */
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    /* Severity badges */
+    .badge-severity-low { background-color: rgba(16, 185, 129, 0.1); color: var(--emerald); border: 1px solid rgba(16, 185, 129, 0.2); }
+    .badge-severity-medium { background-color: rgba(59, 130, 246, 0.1); color: var(--primary); border: 1px solid rgba(59, 130, 246, 0.2); }
+    .badge-severity-high { background-color: rgba(245, 158, 11, 0.1); color: var(--amber); border: 1px solid rgba(245, 158, 11, 0.2); }
+    .badge-severity-critical { background-color: rgba(244, 63, 94, 0.1); color: var(--rose); border: 1px solid rgba(244, 63, 94, 0.2); }
+
+    /* Review alert banner */
+    .review-banner {
+      padding: 1rem;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-weight: 500;
+      font-size: 0.95rem;
+    }
+
+    .review-banner-alert {
+      background-color: rgba(244, 63, 94, 0.1);
+      border: 1px solid rgba(244, 63, 94, 0.2);
+      color: var(--rose);
+    }
+
+    .review-banner-ok {
+      background-color: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      color: var(--emerald);
+    }
+
+    /* Chat/Customer Reply Bubble */
+    .chat-bubble {
+      background-color: #1e293b;
+      border: 1px solid var(--border-color);
+      border-radius: 12px 12px 12px 0;
+      padding: 1rem;
+      position: relative;
+      margin-top: 0.5rem;
+    }
+
+    .chat-bubble::before {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: -9px;
+      width: 0;
+      height: 0;
+      border-right: 10px solid var(--border-color);
+      border-top: 10px solid transparent;
+    }
+
+    .chat-bubble::after {
+      content: '';
+      position: absolute;
+      bottom: 0px;
+      left: -8px;
+      width: 0;
+      height: 0;
+      border-right: 9px solid #1e293b;
+      border-top: 9px solid transparent;
+    }
+
+    /* JSON display */
+    pre {
+      background-color: #0f172a;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 1rem;
+      font-family: monospace;
+      font-size: 0.85rem;
+      overflow-x: auto;
+      max-height: 250px;
+      color: #38bdf8;
+    }
+
+    /* Execution Log UI */
+    .execution-pipeline {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+
+    .pipeline-step {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.5rem 0.75rem;
+      background-color: rgba(15, 23, 42, 0.3);
+      border: 1px dashed var(--border-color);
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+
+    .pipeline-step-active {
+      border-style: solid;
+      border-color: var(--primary);
+      background-color: rgba(59, 130, 246, 0.05);
+    }
+
+    .pipeline-icon {
+      color: var(--primary);
+      font-weight: bold;
+    }
+
+    .spinner {
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+      border-top: 3px solid white;
+      width: 20px;
+      height: 20px;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-logo">Q</div>
+      <div class="brand-title">
+        <h1>QueueStorm Investigator</h1>
+        <p>AI-Driven Ticket Investigator & Classification Engine</p>
+      </div>
+    </div>
+    <div class="system-status">
+      <div class="status-dot"></div>
+      <span>Fintech API Live</span>
+    </div>
+  </header>
+
+  <!-- Quick Cases Selector -->
+  <div class="quick-select">
+    <div class="quick-select-title">Load Pre-loaded Sample Case (SUST preliminary evaluation set)</div>
+    <div class="case-buttons" id="case-btn-container">
+      <!-- Generated via JS -->
+    </div>
+  </div>
+
+  <!-- Workspace Grid -->
+  <div class="main-grid">
+    
+    <!-- Left panel: Form editor -->
+    <div class="panel">
+      <div class="panel-title">
+        <span>Ticket Analysis Playground</span>
+        <span style="font-size: 0.8rem; font-weight: normal; color: var(--text-muted);">POST /analyze-ticket</span>
+      </div>
+      
+      <div class="form-group">
+        <label for="input-ticket-id">Ticket ID</label>
+        <input type="text" id="input-ticket-id" value="TKT-001" placeholder="e.g. TKT-100">
+      </div>
+
+      <div class="form-group">
+        <label for="input-complaint">Customer Complaint Description</label>
+        <textarea id="input-complaint" rows="5" placeholder="Describe the transaction issue..."></textarea>
+      </div>
+
+      <div class="metadata-row">
+        <div class="form-group">
+          <label for="input-language">Declared Language</label>
+          <select id="input-language">
+            <option value="">Auto-Detect</option>
+            <option value="en">English (en)</option>
+            <option value="bn">Bengali (bn)</option>
+            <option value="mixed">Mixed (mixed)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="input-channel">Channel</label>
+          <select id="input-channel">
+            <option value="in_app_chat">In-App Chat</option>
+            <option value="call_center">Call Center</option>
+            <option value="email">Email</option>
+            <option value="merchant_portal">Merchant Portal</option>
+            <option value="field_agent">Field Agent</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="metadata-row">
+        <div class="form-group">
+          <label for="input-user-type">User Type</label>
+          <select id="input-user-type">
+            <option value="customer">Customer</option>
+            <option value="merchant">Merchant</option>
+            <option value="agent">Agent</option>
+            <option value="unknown">Unknown</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="input-campaign">Campaign Context</label>
+          <input type="text" id="input-campaign" value="" placeholder="e.g. boishakh_bonanza_day_1">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="input-history">Transaction History (JSON Array)</label>
+        <textarea id="input-history" rows="6" style="font-family: monospace; font-size: 0.85rem;" placeholder="[]"></textarea>
+      </div>
+
+      <button class="btn-analyze" id="btn-submit">
+        <span>Run Investigation Pipeline</span>
+      </button>
+    </div>
+
+    <!-- Right panel: Results and Visualizer -->
+    <div class="panel" style="background-color: #172237;">
+      <div class="panel-title">
+        <span>Investigation Report</span>
+        <span id="exec-badge" class="badge badge-severity-low" style="text-transform: none;">Standby</span>
+      </div>
+
+      <!-- Live metrics -->
+      <div class="metadata-row">
+        <div class="metadata-card">
+          <span class="metadata-label">Case Classification</span>
+          <span class="metadata-value" id="res-case-type">—</span>
+        </div>
+        <div class="metadata-card">
+          <span class="metadata-label">Evidence Verdict</span>
+          <span class="metadata-value" id="res-verdict">—</span>
+        </div>
+      </div>
+
+      <div class="metadata-row">
+        <div class="metadata-card">
+          <span class="metadata-label">Routed Department</span>
+          <span class="metadata-value" id="res-dept">—</span>
+        </div>
+        <div class="metadata-card">
+          <span class="metadata-label">Linked TXN ID</span>
+          <span class="metadata-value" id="res-txn-id">—</span>
+        </div>
+      </div>
+
+      <!-- Human review indicator -->
+      <div class="review-banner" id="res-review-banner" style="display: none;">
+        <!-- Filled via JS -->
+      </div>
+
+      <!-- Summary -->
+      <div class="form-group">
+        <label>Agent Case Summary</label>
+        <div class="metadata-card" style="background-color: rgba(15, 23, 42, 0.3); font-weight: normal; font-size: 0.95rem; border-style: solid;" id="res-summary">
+          —
+        </div>
+      </div>
+
+      <!-- Action -->
+      <div class="form-group">
+        <label>Recommended Agent Action</label>
+        <div class="metadata-card" style="background-color: rgba(15, 23, 42, 0.3); font-weight: normal; font-size: 0.95rem; border-style: solid;" id="res-action">
+          —
+        </div>
+      </div>
+
+      <!-- Customer reply chat window -->
+      <div class="form-group">
+        <label>Customer Message Auto-Reply (Safety-Scrubbed)</label>
+        <div class="chat-bubble" id="res-reply">
+          Waiting for investigation launch...
+        </div>
+      </div>
+
+      <!-- Raw JSON Details -->
+      <div class="form-group">
+        <label>Raw API Response payload</label>
+        <pre><code id="res-json">{}</code></pre>
+      </div>
+
+      <!-- 8-Layer Pipeline visual log -->
+      <div class="form-group">
+        <label>Under-The-Hood Processing Logs</label>
+        <div class="execution-pipeline">
+          <div class="pipeline-step"><span class="pipeline-icon">✔</span> <span>1. Sanitize & Truncate Inputs</span></div>
+          <div class="pipeline-step"><span class="pipeline-icon">✔</span> <span>2. Rule Engine (Duplicate, Phishing, & Cash-in match)</span></div>
+          <div class="pipeline-step"><span class="pipeline-icon">✔</span> <span>3. LLM Prompt Context Construction</span></div>
+          <div class="pipeline-step"><span class="pipeline-icon">✔</span> <span>4. Gemini 2.5 Flash Inference / Fallback Model</span></div>
+          <div class="pipeline-step"><span class="pipeline-icon">✔</span> <span>5. Enum Post-Validation Parser</span></div>
+          <div class="pipeline-step"><span class="pipeline-icon">✔</span> <span>6. Deterministic Safety Double-Lock Guardrails</span></div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // Embed the 10 public sample cases
+  const sampleCases = [
+    {
+      id: "SAMPLE-01",
+      label: "Wrong Transfer (Consistent)",
+      ticket_id: "TKT-001",
+      language: "en",
+      channel: "in_app_chat",
+      user_type: "customer",
+      campaign_context: "boishakh_bonanza_day_1",
+      complaint: "I sent 5000 taka to a wrong number around 2pm today. The number was supposed to be 01712345678 but I think I typed it wrong. The person isn't responding to my call. Please help me get my money back.",
+      transaction_history: [
+        {
+          transaction_id: "TXN-9101",
+          timestamp: "2026-04-14T14:08:22Z",
+          type: "transfer",
+          amount: 5000,
+          counterparty: "+8801719876543",
+          status: "completed"
+        },
+        {
+          transaction_id: "TXN-9087",
+          timestamp: "2026-04-13T18:12:00Z",
+          type: "cash_in",
+          amount: 10000,
+          counterparty: "AGENT-512",
+          status: "completed"
+        }
+      ]
+    },
+    {
+      id: "SAMPLE-02",
+      label: "Wrong Transfer (Inconsistent)",
+      ticket_id: "TKT-002",
+      language: "en",
+      channel: "in_app_chat",
+      user_type: "customer",
+      campaign_context: "",
+      complaint: "I sent 2000 to the wrong person by mistake. Please reverse it.",
+      transaction_history: [
+        {
+          transaction_id: "TXN-9202",
+          timestamp: "2026-04-14T11:30:00Z",
+          type: "transfer",
+          amount: 2000,
+          counterparty: "+8801812345678",
+          status: "completed"
+        },
+        {
+          transaction_id: "TXN-9180",
+          timestamp: "2026-04-10T09:15:00Z",
+          type: "transfer",
+          amount: 2500,
+          counterparty: "+8801812345678",
+          status: "completed"
+        },
+        {
+          transaction_id: "TXN-9145",
+          timestamp: "2026-04-05T17:45:00Z",
+          type: "transfer",
+          amount: 1500,
+          counterparty: "+8801812345678",
+          status: "completed"
+        }
+      ]
+    },
+    {
+      id: "SAMPLE-03",
+      label: "Failed Payment (Consistent)",
+      ticket_id: "TKT-003",
+      language: "en",
+      channel: "in_app_chat",
+      user_type: "customer",
+      campaign_context: "",
+      complaint: "I tried to pay 1200 taka for my mobile recharge but the app showed failed. But my balance was deducted! Please refund my money.",
+      transaction_history: [
+        {
+          transaction_id: "TXN-9301",
+          timestamp: "2026-04-14T16:00:00Z",
+          type: "payment",
+          amount: 1200,
+          counterparty: "MERCHANT-MOBILE-OP",
+          status: "failed"
+        }
+      ]
+    },
+    {
+      id: "SAMPLE-04",
+      label: "Refund Change of Mind",
+      ticket_id: "TKT-004",
+      language: "en",
+      channel: "in_app_chat",
+      user_type: "customer",
+      campaign_context: "",
+      complaint: "I paid 500 to a merchant for a product but I changed my mind and don't want it anymore. Please refund my 500 taka.",
+      transaction_history: [
+        {
+          transaction_id: "TXN-9401",
+          timestamp: "2026-04-14T13:00:00Z",
+          type: "payment",
+          amount: 500,
+          counterparty: "MERCHANT-7821",
+          status: "completed"
+        }
+      ]
+    },
+    {
+      id: "SAMPLE-05",
+      label: "Phishing Report",
+      ticket_id: "TKT-005",
+      language: "en",
+      channel: "call_center",
+      user_type: "customer",
+      campaign_context: "",
+      complaint: "Someone called me saying they are from bKash and asked for my OTP. They said my account will be blocked if I don't share it. Is this real? I haven't shared anything yet.",
+      transaction_history: []
+    },
+    {
+      id: "SAMPLE-06",
+      label: "Vague Complaint",
+      ticket_id: "TKT-006",
+      language: "en",
+      channel: "in_app_chat",
+      user_type: "customer",
+      campaign_context: "",
+      complaint: "Something is wrong with my money. Please check.",
+      transaction_history: [
+        {
+          transaction_id: "TXN-9601",
+          timestamp: "2026-04-13T10:00:00Z",
+          type: "cash_in",
+          amount: 3000,
+          counterparty: "AGENT-220",
+          status: "completed"
+        },
+        {
+          transaction_id: "TXN-9602",
+          timestamp: "2026-04-12T15:30:00Z",
+          type: "transfer",
+          amount: 800,
+          counterparty: "+8801911223344",
+          status: "completed"
+        }
+      ]
+    },
+    {
+      id: "SAMPLE-07",
+      label: "Agent Cash-in (Bangla)",
+      ticket_id: "TKT-007",
+      language: "bn",
+      channel: "call_center",
+      user_type: "customer",
+      campaign_context: "",
+      complaint: "আমি আজ সকালে এজেন্টের কাছে ২০০০ টাকা ক্যাশ ইন করেছি কিন্তু আমার ব্যালেন্সে টাকা আসেনি। এজেন্ট বলছে টাকা পাঠিয়েছে কিন্তু আমি দেখছি না।",
+      transaction_history: [
+        {
+          transaction_id: "TXN-9701",
+          timestamp: "2026-04-14T09:30:00Z",
+          type: "cash_in",
+          amount: 2000,
+          counterparty: "AGENT-318",
+          status: "pending"
+        }
+      ]
+    },
+    {
+      id: "SAMPLE-08",
+      label: "Ambiguous Transactions",
+      ticket_id: "TKT-008",
+      language: "en",
+      channel: "in_app_chat",
+      user_type: "customer",
+      campaign_context: "",
+      complaint: "I sent 1000 to my brother yesterday but he says he didn't get it. Please check.",
+      transaction_history: [
+        {
+          transaction_id: "TXN-9801",
+          timestamp: "2026-04-13T11:20:00Z",
+          type: "transfer",
+          amount: 1000,
+          counterparty: "+8801712001122",
+          status: "completed"
+        },
+        {
+          transaction_id: "TXN-9802",
+          timestamp: "2026-04-13T19:45:00Z",
+          type: "transfer",
+          amount: 1000,
+          counterparty: "+8801812334455",
+          status: "completed"
+        },
+        {
+          transaction_id: "TXN-9803",
+          timestamp: "2026-04-13T20:10:00Z",
+          type: "transfer",
+          amount: 1000,
+          counterparty: "+8801712001122",
+          status: "failed"
+        }
+      ]
+    },
+    {
+      id: "SAMPLE-09",
+      label: "Merchant Settlement Delay",
+      ticket_id: "TKT-009",
+      language: "en",
+      channel: "merchant_portal",
+      user_type: "merchant",
+      campaign_context: "",
+      complaint: "I am a merchant. My yesterday's sales of 15000 taka have not been settled to my account. Settlement usually happens by 11am next day. Please check.",
+      transaction_history: [
+        {
+          transaction_id: "TXN-9901",
+          timestamp: "2026-04-13T18:00:00Z",
+          type: "settlement",
+          amount: 15000,
+          counterparty: "MERCHANT-SELF",
+          status: "pending"
+        }
+      ]
+    },
+    {
+      id: "SAMPLE-10",
+      label: "Duplicate Bill Payment",
+      ticket_id: "TKT-010",
+      language: "en",
+      channel: "in_app_chat",
+      user_type: "customer",
+      campaign_context: "",
+      complaint: "I paid my electricity bill 850 taka but it deducted twice from my account. Please check, I only paid once.",
+      transaction_history: [
+        {
+          transaction_id: "TXN-10001",
+          timestamp: "2026-04-14T08:15:30Z",
+          type: "payment",
+          amount: 850,
+          counterparty: "BILLER-DESCO",
+          status: "completed"
+        },
+        {
+          transaction_id: "TXN-10002",
+          timestamp: "2026-04-14T08:15:42Z",
+          type: "payment",
+          amount: 850,
+          counterparty: "BILLER-DESCO",
+          status: "completed"
+        }
+      ]
+    }
+  ];
+
+  // Render quick selector buttons
+  const btnContainer = document.getElementById("case-btn-container");
+  sampleCases.forEach((c, idx) => {
+    const btn = document.createElement("button");
+    btn.className = "btn-case";
+    btn.textContent = `${c.id} (${c.label})`;
+    btn.addEventListener("click", () => loadSample(idx));
+    btnContainer.appendChild(btn);
+  });
+
+  // Populate form with case index
+  function loadSample(idx) {
+    // Mark active
+    const buttons = document.querySelectorAll(".btn-case");
+    buttons.forEach((b, i) => {
+      if (i === idx) b.classList.add("active");
+      else b.classList.remove("active");
+    });
+
+    const c = sampleCases[idx];
+    document.getElementById("input-ticket-id").value = c.ticket_id;
+    document.getElementById("input-complaint").value = c.complaint;
+    document.getElementById("input-language").value = c.language;
+    document.getElementById("input-channel").value = c.channel;
+    document.getElementById("input-user-type").value = c.user_type;
+    document.getElementById("input-campaign").value = c.campaign_context;
+    document.getElementById("input-history").value = JSON.stringify(c.transaction_history, null, 2);
+  }
+
+  // Load sample case 0 by default
+  loadSample(0);
+
+  // Submit action
+  const btnSubmit = document.getElementById("btn-submit");
+  btnSubmit.addEventListener("click", async () => {
+    btnSubmit.disabled = true;
+    btnSubmit.innerHTML = `<div class="spinner"></div> <span>Investigating...</span>`;
+    
+    // Clear standby badge
+    const badge = document.getElementById("exec-badge");
+    badge.className = "badge badge-severity-medium";
+    badge.textContent = "Processing";
+
+    // Gather payload
+    let historyJson = [];
+    try {
+      historyJson = JSON.parse(document.getElementById("input-history").value || "[]");
+    } catch(e) {
+      alert("Invalid JSON format in transaction history field.");
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = "Run Investigation Pipeline";
+      return;
+    }
+
+    const payload = {
+      ticket_id: document.getElementById("input-ticket-id").value,
+      complaint: document.getElementById("input-complaint").value,
+      language: document.getElementById("input-language").value || null,
+      channel: document.getElementById("input-channel").value,
+      user_type: document.getElementById("input-user-type").value,
+      campaign_context: document.getElementById("input-campaign").value || null,
+      transaction_history: historyJson
+    };
+
+    try {
+      const response = await fetch("/analyze-ticket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || "Server error");
+      }
+
+      // Populate results
+      document.getElementById("res-case-type").textContent = data.case_type || "other";
+      document.getElementById("res-verdict").textContent = data.evidence_verdict || "insufficient_data";
+      document.getElementById("res-dept").textContent = data.department || "customer_support";
+      document.getElementById("res-txn-id").textContent = data.relevant_transaction_id || "None";
+      document.getElementById("res-summary").textContent = data.agent_summary;
+      document.getElementById("res-action").textContent = data.recommended_next_action;
+      document.getElementById("res-reply").textContent = data.customer_reply;
+      document.getElementById("res-json").textContent = JSON.stringify(data, null, 2);
+
+      // Status badge and severity
+      const severity = data.severity || "medium";
+      badge.textContent = severity.toUpperCase() + " SEVERITY";
+      badge.className = `badge badge-severity-${severity}`;
+
+      // Human review alert banner
+      const reviewBanner = document.getElementById("res-review-banner");
+      reviewBanner.style.display = "flex";
+      if (data.human_review_required) {
+        reviewBanner.className = "review-banner review-banner-alert";
+        reviewBanner.innerHTML = "<span>⚠️</span> <span>Human Review Required. Flagged for escalation to Routed Department.</span>";
+      } else {
+        reviewBanner.className = "review-banner review-banner-ok";
+        reviewBanner.innerHTML = "<span>✔</span> <span>Resolved Automatically. Reversal or direct policy guided action approved.</span>";
+      }
+
+    } catch (err) {
+      badge.textContent = "PIPELINE FAILED";
+      badge.className = "badge badge-severity-critical";
+      document.getElementById("res-reply").textContent = `Investigation Error: ${err.message}`;
+      document.getElementById("res-json").textContent = JSON.stringify({ error: err.message }, null, 2);
+    } finally {
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = "Run Investigation Pipeline";
+    }
+  });
+</script>
+</body>
+</html>

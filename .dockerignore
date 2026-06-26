@@ -1,0 +1,16 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.env
+.env.*
+!.env.example
+tests/
+*.md
+!README.md
+.git
+.gitignore
+*.pdf
+node_modules
+.venv
+venv

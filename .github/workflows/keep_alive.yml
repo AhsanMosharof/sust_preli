@@ -1,0 +1,23 @@
+name: Keep Alive Ping
+
+on:
+  schedule:
+    # Run every 10 minutes
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Allow manual trigger in GitHub Actions tab
+
+jobs:
+  ping:
+    runs-ok: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Health Endpoint
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+        run: |
+          if [ -z "$APP_URL" ]; then
+            echo "APP_URL secret is not set. Please set it in Repository Settings -> Secrets and Variables -> Actions."
+            exit 1
+          fi
+          echo "Pinging health endpoint at $APP_URL/health"
+          curl -f -s "$APP_URL/health"
